@@ -229,10 +229,11 @@ const Submission = {
   async create(data) {
     const result = await sql`
       INSERT INTO submissions (
-        user_id, competition_id, title, problem, solution, market, impact
+        user_id, competition_id, title, problem, solution, market, impact, payment_status, payment_id
       ) VALUES (
         ${data.userId}, ${data.competitionId}, ${data.title}, 
-        ${data.problem}, ${data.solution}, ${data.market}, ${data.impact}
+        ${data.problem}, ${data.solution}, ${data.market}, ${data.impact},
+        ${data.paymentStatus || 'pending'}, ${data.paymentId || null}
       )
       RETURNING *
     `;
