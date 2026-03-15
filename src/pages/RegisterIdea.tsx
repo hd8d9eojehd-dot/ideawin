@@ -405,7 +405,7 @@ const RegisterIdea = () => {
               
               <p className="text-gray-400 mb-2 text-sm font-black uppercase tracking-wider">Arena Entry</p>
               <p className="text-6xl font-black mb-8">
-                <span className="gradient-text">₹9</span>
+                <span className="gradient-text">₹1</span>
               </p>
               
               <div className="text-left hud-element p-6 mb-8 space-y-4">
@@ -452,7 +452,7 @@ const RegisterIdea = () => {
                     className="w-full py-5 btn-gaming text-white flex items-center justify-center space-x-3 text-lg"
                   >
                     <CreditCard className="w-6 h-6" />
-                    <span>Pay ₹9 & Register</span>
+                    <span>Pay ₹1 & Register</span>
                   </motion.button>
                   <p className="mt-4 text-[10px] text-gray-600 uppercase tracking-widest">
                     Secure transaction via Cashfree Gateway

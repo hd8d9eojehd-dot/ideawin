@@ -723,7 +723,7 @@ Respond ONLY with valid JSON in this exact format:
         // This prevents issues with stale/completed payment sessions
 
         const orderId = `order_${Date.now()}_${userId.toString().slice(-4)}`;
-        const amount = competition.entry_fee || 9;
+        const amount = competition.entry_fee || 1;
 
         const CASHFREE_APP_ID = (process.env.CASHFREE_APP_ID || '').trim();
         const CASHFREE_SECRET_KEY = (process.env.CASHFREE_SECRET_KEY || '').trim();

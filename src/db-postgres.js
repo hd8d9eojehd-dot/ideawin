@@ -37,7 +37,7 @@ async function initDB() {
         status VARCHAR(50) DEFAULT 'active',
         start_date TIMESTAMP,
         end_date TIMESTAMP,
-        entry_fee INTEGER DEFAULT 9,
+        entry_fee INTEGER DEFAULT 1,
         prize_pool INTEGER,
         prizes_json TEXT,
         judging_criteria_json TEXT,

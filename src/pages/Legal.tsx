@@ -33,12 +33,12 @@ export const Terms = () => (
             <li>• Be at least 18 years of age</li>
             <li>• Have the legal capacity to enter into binding contracts</li>
             <li>• Provide accurate and complete registration information</li>
-            <li>• Pay the entry fee of ₹9 per submission</li>
+            <li>• Pay the entry fee of ₹1 per submission</li>
           </ul>
         </section>
         <section>
           <h2 className="text-white text-lg font-bold mb-3">4. Entry Fee & Payment</h2>
-          <p>The entry fee for each submission is ₹9 (Indian Rupees Nine only). By submitting your entry:</p>
+          <p>The entry fee for each submission is ₹1 (Indian Rupee One only). By submitting your entry:</p>
           <ul className="mt-2 space-y-2">
             <li>• Payment must be completed before submission is accepted</li>
             <li>• Entry fees are non-refundable (see Refund Policy)</li>
@@ -123,7 +123,7 @@ export const Refund = () => (
         </div>
         <section>
           <h2 className="text-white text-lg font-bold mb-3">1. Policy Overview</h2>
-          <p>By submitting an entry and paying the entry fee of ₹9, you acknowledge and agree that:</p>
+          <p>By submitting an entry and paying the entry fee of ₹1, you acknowledge and agree that:</p>
           <ul className="mt-2 list-disc pl-5 space-y-1">
             <li>All payments are final and non-refundable</li>
             <li>No refunds will be issued for any reason</li>

@@ -169,7 +169,7 @@ const Home = () => {
               { 
                 stage: '01', 
                 title: 'Register', 
-                desc: 'Pay ₹9 entry fee', 
+                desc: 'Pay ₹1 entry fee', 
                 icon: Users,
                 color: 'from-blue-600 to-cyan-600'
               },
