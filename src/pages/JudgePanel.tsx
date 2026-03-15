@@ -34,6 +34,9 @@ const JudgePanel = () => {
   const [userToDelete, setUserToDelete] = React.useState<Submission | null>(null);
   const [showPaymentDashboard, setShowPaymentDashboard] = React.useState(false);
   const [showUserActivityDashboard, setShowUserActivityDashboard] = React.useState(false);
+  const [showFeeModal, setShowFeeModal] = React.useState(false);
+  const [newEntryFee, setNewEntryFee] = React.useState(1);
+  const [isUpdatingFee, setIsUpdatingFee] = React.useState(false);
 
   const { data: submissions, isLoading } = useQuery<Submission[]>({
     queryKey: ['all-submissions'],
@@ -83,8 +86,34 @@ const JudgePanel = () => {
           console.error('Failed to parse prizes', e);
         }
       }
+      // Set current entry fee
+      setNewEntryFee(activeCompetition.entry_fee || activeCompetition.entryFee || 1);
     }
   }, [activeCompetition]);
+
+  const handleUpdateEntryFee = async () => {
+    if (!activeCompetition) return;
+    if (newEntryFee < 1) {
+      toast.error('Entry fee must be at least ₹1');
+      return;
+    }
+    
+    setIsUpdatingFee(true);
+    try {
+      await api.post('/admin/update-entry-fee', {
+        competitionId: activeCompetition.id,
+        entryFee: newEntryFee
+      }, { headers: { Authorization: `Bearer ${token}` } });
+      
+      toast.success(`Entry fee updated to ₹${newEntryFee}!`);
+      queryClient.invalidateQueries({ queryKey: ['active-competition'] });
+      setShowFeeModal(false);
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || 'Failed to update entry fee');
+    } finally {
+      setIsUpdatingFee(false);
+    }
+  };
 
   const handlePublishToggle = async () => {
     if (!activeCompetition) return;
@@ -435,6 +464,15 @@ const JudgePanel = () => {
           >
             <Trophy className="w-5 h-5" />
             <span>Set Prizes</span>
+          </motion.button>
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setShowFeeModal(true)}
+            className="flex items-center space-x-2 px-6 py-3 bg-green-600/20 text-green-400 font-black rounded-xl border-2 border-green-600/30 hover:bg-green-600/30 transition-all"
+          >
+            <DollarSign className="w-5 h-5" />
+            <span>Set Entry Fee</span>
           </motion.button>
           <motion.button
             whileHover={{ scale: 1.05 }}
@@ -849,6 +887,95 @@ const JudgePanel = () => {
                 className="flex-1 px-6 py-3 btn-gaming text-white"
               >
                 Save Prizes
+              </motion.button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Entry Fee Modal */}
+      {showFeeModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="card-gaming max-w-md w-full p-8 relative overflow-hidden"
+          >
+            <div className="scan-line" />
+            <button
+              onClick={() => setShowFeeModal(false)}
+              className="absolute top-4 right-4 text-gray-500 hover:text-white text-2xl"
+            >
+              ✕
+            </button>
+            <div className="flex items-center space-x-3 mb-6">
+              <DollarSign className="w-10 h-10 text-green-400" />
+              <h3 className="text-3xl font-black">
+                <span className="gradient-text">Set Entry Fee</span>
+              </h3>
+            </div>
+            
+            <div className="space-y-4 mb-6">
+              <div className="hud-element p-4">
+                <p className="text-sm text-gray-400 mb-2">
+                  Current entry fee: <span className="text-white font-black">₹{activeCompetition?.entry_fee || activeCompetition?.entryFee || 1}</span>
+                </p>
+                <p className="text-xs text-gray-500">
+                  Changes will apply immediately to all new registrations
+                </p>
+              </div>
+
+              <div>
+                <label className="text-xs font-black text-gray-500 uppercase tracking-wider mb-2 block">
+                  New Entry Fee (₹)
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={newEntryFee}
+                  onChange={(e) => setNewEntryFee(parseInt(e.target.value) || 1)}
+                  className="w-full bg-white/5 border-2 border-green-500/30 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-green-500 focus:shadow-lg focus:shadow-green-500/20 font-black text-2xl transition-all text-center"
+                  placeholder="1"
+                />
+              </div>
+
+              <div className="hud-element p-6 holographic">
+                <div className="text-xs text-gray-500 mb-2 font-black uppercase tracking-wider">Preview</div>
+                <div className="text-3xl font-black">
+                  <span className="gradient-text">
+                    ₹{newEntryFee}
+                  </span>
+                </div>
+                <div className="text-xs text-gray-400 mt-2">
+                  Users will pay this amount to register
+                </div>
+              </div>
+            </div>
+
+            <div className="flex space-x-3">
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setShowFeeModal(false)}
+                className="flex-1 px-6 py-3 glass border-2 border-white/20 hover:border-white/40 text-white font-black rounded-xl transition-all"
+              >
+                Cancel
+              </motion.button>
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={handleUpdateEntryFee}
+                disabled={isUpdatingFee || newEntryFee < 1}
+                className="flex-1 px-6 py-3 btn-gaming text-white disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {isUpdatingFee ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Updating...</span>
+                  </>
+                ) : (
+                  <span>Update Fee</span>
+                )}
               </motion.button>
             </div>
           </motion.div>

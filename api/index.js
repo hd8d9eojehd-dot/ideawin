@@ -419,6 +419,44 @@ Respond ONLY with valid JSON in this exact format:
       return res.status(200).json(competition);
     }
 
+    // Update competition entry fee
+    if (path === '/admin/update-entry-fee' && method === 'POST') {
+      if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+      const user = await User.findById(userId);
+      if (!user?.is_admin) return res.status(403).json({ error: 'Forbidden' });
+
+      try {
+        const { competitionId, entryFee } = req.body;
+        
+        if (!competitionId || entryFee === undefined) {
+          return res.status(400).json({ error: 'Competition ID and entry fee are required' });
+        }
+
+        if (entryFee < 1) {
+          return res.status(400).json({ error: 'Entry fee must be at least ₹1' });
+        }
+        
+        await sql`
+          UPDATE competitions 
+          SET entry_fee = ${entryFee}
+          WHERE id = ${competitionId}
+        `;
+
+        const updated = await Competition.findById(competitionId);
+        
+        console.log(`✅ Entry fee updated to ₹${entryFee} by admin:`, user.email);
+        
+        return res.status(200).json({ 
+          success: true, 
+          message: `Entry fee updated to ₹${entryFee}`,
+          competition: updated
+        });
+      } catch (error) {
+        console.error('Error updating entry fee:', error);
+        return res.status(500).json({ error: 'Failed to update entry fee' });
+      }
+    }
+
     if (path === '/admin/delete-all-users' && method === 'POST') {
       console.log('Delete all users endpoint hit');
       if (!userId) {
