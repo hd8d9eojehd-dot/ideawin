@@ -1,0 +1,48 @@
+╔═══════════════════════════════════════════════════════════════════╗
+║              🎮 CASHFREE PAYMENT - QUICK TEST GUIDE 🎮            ║
+╚═══════════════════════════════════════════════════════════════════╝
+
+🌐 PRODUCTION URL
+   https://ideawin-platform.vercel.app
+
+⚠️  STEP 1: CONFIGURE WEBHOOK (DO THIS FIRST!)
+   1. Login: https://merchant.cashfree.com/
+   2. Go to: Developers → Webhooks
+   3. Add webhook: https://ideawin-platform.vercel.app/api/payments/webhook
+   4. Select: PAYMENT_SUCCESS, PAYMENT_FAILED
+   5. Save
+
+🧪 STEP 2: TEST PAYMENT
+   1. Open app: https://ideawin-platform.vercel.app
+   2. Login: lokesh009.naik@gmail.com
+   3. Click: "Enter Arena"
+   4. Fill all fields
+   5. Click: "Pay ₹9 & Enter Arena"
+   6. Complete payment
+   7. Verify in Admin Portal
+
+✅ STEP 3: VERIFY SUCCESS
+   • Dashboard shows submission
+   • Payment status: ✓ Paid
+   • Admin Portal → Payments shows ₹9
+   • Admin Portal → User Activity shows paid badge
+
+🔍 TROUBLESHOOTING
+   • Payment not updating? → Check webhook configuration
+   • Can't login? → Wait 5-10 min after OAuth config
+   • Payment fails? → Check Cashfree dashboard logs
+   • Error messages? → Check browser console (F12)
+
+📊 MONITORING
+   • Vercel Logs: https://vercel.com/sim2435s-projects/ideawin-platform
+   • Cashfree Dashboard: https://merchant.cashfree.com/
+   • Database: https://console.neon.tech/
+
+💡 TEST CARDS (if in sandbox mode)
+   Card: 4111 1111 1111 1111
+   CVV: Any 3 digits
+   Expiry: Any future date
+
+🎯 SUCCESS = Payment completes + Status updates + Admin sees payment
+
+═══════════════════════════════════════════════════════════════════

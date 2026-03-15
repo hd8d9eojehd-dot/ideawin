@@ -1,0 +1,17 @@
+﻿
+=== QUICK GITHUB PUSH GUIDE ===
+
+STEP 1: Create GitHub Repository
+---------------------------------
+1. Go to: https://github.com/new
+2. Repository name: ideawin-platform
+3. Description: IdeaWin by CAFYO - Startup Idea Competition Platform
+4. Choose Public or Private
+5. DO NOT check 'Initialize with README'
+6. Click 'Create repository'
+
+STEP 2: Run These Commands
+---------------------------
+Copy and paste these commands one by one:
+
+

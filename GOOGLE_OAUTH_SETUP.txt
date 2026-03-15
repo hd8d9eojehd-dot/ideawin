@@ -1,0 +1,203 @@
+═══════════════════════════════════════════════════════════════════════════════
+  GOOGLE OAUTH SETUP - COMPLETE GUIDE
+═══════════════════════════════════════════════════════════════════════════════
+
+📍 SETUP URL: https://console.cloud.google.com/apis/credentials
+
+═══════════════════════════════════════════════════════════════════════════════
+  STEP 1: CREATE OAUTH CLIENT ID
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Go to: https://console.cloud.google.com/apis/credentials
+2. Click: "Create Credentials" → "OAuth client ID"
+3. Application type: "Web application"
+4. Name: "IdeaWin Platform"
+
+═══════════════════════════════════════════════════════════════════════════════
+  STEP 2: AUTHORIZED JAVASCRIPT ORIGINS
+═══════════════════════════════════════════════════════════════════════════════
+
+Copy and paste these URLs (one per line):
+
+http://localhost:3001
+http://localhost:3000
+http://127.0.0.1:3001
+
+
+For production (if deploying to Vercel), also add:
+https://ideawin-platform.vercel.app
+
+
+═══════════════════════════════════════════════════════════════════════════════
+  STEP 3: AUTHORIZED REDIRECT URIS
+═══════════════════════════════════════════════════════════════════════════════
+
+Copy and paste these URLs (one per line):
+
+http://localhost:3001
+http://localhost:3001/
+http://localhost:3000
+http://localhost:3000/
+http://127.0.0.1:3001
+http://127.0.0.1:3001/
+
+
+For production (if deploying to Vercel), also add:
+https://ideawin-platform.vercel.app
+https://ideawin-platform.vercel.app/
+
+
+═══════════════════════════════════════════════════════════════════════════════
+  STEP 4: COPY YOUR CREDENTIALS
+═══════════════════════════════════════════════════════════════════════════════
+
+After creating, you'll get:
+
+Client ID: 
+  123456789-xxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com
+
+Client Secret:
+  GOCSPX-xxxxxxxxxxxxxxxxxxxxxxxx
+
+
+═══════════════════════════════════════════════════════════════════════════════
+  STEP 5: UPDATE .env FILE
+═══════════════════════════════════════════════════════════════════════════════
+
+Replace these lines in your .env file:
+
+GOOGLE_CLIENT_ID=YOUR_NEW_CLIENT_ID_HERE
+GOOGLE_CLIENT_SECRET=YOUR_NEW_CLIENT_SECRET_HERE
+VITE_GOOGLE_CLIENT_ID=YOUR_NEW_CLIENT_ID_HERE
+
+
+═══════════════════════════════════════════════════════════════════════════════
+  STEP 6: RESTART SERVERS
+═══════════════════════════════════════════════════════════════════════════════
+
+Stop both servers (Ctrl+C in both terminals) and restart:
+
+Terminal 1:
+npm run api
+
+Terminal 2:
+npm run dev
+
+
+═══════════════════════════════════════════════════════════════════════════════
+  QUICK COPY-PASTE SECTION
+═══════════════════════════════════════════════════════════════════════════════
+
+AUTHORIZED JAVASCRIPT ORIGINS (copy all 3 lines):
+────────────────────────────────────────────────────────────────────────────
+http://localhost:3001
+http://localhost:3000
+http://127.0.0.1:3001
+────────────────────────────────────────────────────────────────────────────
+
+
+AUTHORIZED REDIRECT URIS (copy all 6 lines):
+────────────────────────────────────────────────────────────────────────────
+http://localhost:3001
+http://localhost:3001/
+http://localhost:3000
+http://localhost:3000/
+http://127.0.0.1:3001
+http://127.0.0.1:3001/
+────────────────────────────────────────────────────────────────────────────
+
+
+FOR PRODUCTION - ADD THESE TOO:
+────────────────────────────────────────────────────────────────────────────
+JAVASCRIPT ORIGINS:
+https://ideawin-platform.vercel.app
+
+REDIRECT URIS:
+https://ideawin-platform.vercel.app
+https://ideawin-platform.vercel.app/
+────────────────────────────────────────────────────────────────────────────
+
+
+═══════════════════════════════════════════════════════════════════════════════
+  TESTING
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Open: http://localhost:3001
+2. Click "Login" button
+3. Google OAuth popup should appear
+4. Select your Google account
+5. You should be logged in successfully
+
+If you see "redirect_uri_mismatch" error:
+- Check URIs match exactly (including trailing slash)
+- Wait 5 minutes after saving changes
+- Clear browser cache
+
+
+═══════════════════════════════════════════════════════════════════════════════
+  TROUBLESHOOTING
+═══════════════════════════════════════════════════════════════════════════════
+
+Error: "redirect_uri_mismatch"
+→ Check redirect URI matches exactly (including trailing slash)
+→ Verify port is 3001 not 3000
+→ Wait 5 minutes for Google to propagate changes
+
+Error: "invalid_client"
+→ Check Client ID and Secret in .env
+→ Restart both servers after changing .env
+
+Error: "access_blocked"
+→ Add your email as test user in OAuth consent screen
+→ Or publish the app (if ready for production)
+
+Error: "popup_closed_by_user"
+→ User closed the popup, try again
+→ Check if popup blocker is enabled
+
+
+═══════════════════════════════════════════════════════════════════════════════
+  OAUTH CONSENT SCREEN SETUP
+═══════════════════════════════════════════════════════════════════════════════
+
+If you haven't set up the OAuth consent screen:
+
+1. Go to: https://console.cloud.google.com/apis/credentials/consent
+2. User Type: "External" (for testing) or "Internal" (for organization)
+3. App name: "IdeaWin Platform"
+4. User support email: Your email
+5. Developer contact: Your email
+6. Scopes: Add these scopes:
+   - .../auth/userinfo.email
+   - .../auth/userinfo.profile
+   - openid
+7. Test users: Add your email (if External and not published)
+8. Save and continue
+
+
+═══════════════════════════════════════════════════════════════════════════════
+  SECURITY TIPS
+═══════════════════════════════════════════════════════════════════════════════
+
+✓ Never commit .env to Git (already in .gitignore)
+✓ Use different credentials for dev/production
+✓ Restrict origins to actual domains in production
+✓ Keep Client Secret secure
+✓ Rotate credentials periodically
+
+
+═══════════════════════════════════════════════════════════════════════════════
+  SUMMARY
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Create OAuth Client ID at Google Cloud Console
+2. Add JavaScript Origins (3 URLs for localhost)
+3. Add Redirect URIs (6 URLs for localhost)
+4. Copy Client ID and Client Secret
+5. Update .env file with new credentials
+6. Restart both servers
+7. Test login at http://localhost:3001
+
+Done! 🎉
+
+═══════════════════════════════════════════════════════════════════════════════

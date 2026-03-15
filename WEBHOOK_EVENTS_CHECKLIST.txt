@@ -1,0 +1,55 @@
+╔═══════════════════════════════════════════════════════════════╗
+║              📋 WEBHOOK EVENTS - WHAT TO SELECT 📋            ║
+╚═══════════════════════════════════════════════════════════════╝
+
+YOU'RE ON THE RIGHT PAGE! Now select events:
+
+┌───────────────────────────────────────────────────────────────┐
+│ STEP 1: Scroll Down in "Select Events" Section               │
+└───────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────┐
+│ STEP 2: Find and Check These Events                          │
+└───────────────────────────────────────────────────────────────┘
+
+   ✅ MUST HAVE (Critical):
+   ☑ success_payment
+      → Triggered when payment is successful
+      → Updates payment status to "paid"
+      → Updates submission status
+
+   ✅ RECOMMENDED:
+   ☑ failed_payment
+      → Triggered when payment fails
+      → Updates payment status to "failed"
+
+   ⚪ OPTIONAL:
+   ☑ user_dropped
+      → Triggered when user abandons payment
+      → Helps track incomplete payments
+
+┌───────────────────────────────────────────────────────────────┐
+│ STEP 3: Use Search Box                                       │
+└───────────────────────────────────────────────────────────────┘
+
+   I can see there's a search box that says:
+   "Search events you need to subscribe"
+
+   Type: "success_payment"
+   Then check the box when it appears
+
+┌───────────────────────────────────────────────────────────────┐
+│ STEP 4: Save Configuration                                   │
+└───────────────────────────────────────────────────────────────┘
+
+   After selecting events:
+   → Scroll to bottom of page
+   → Click "Save" or "Add Endpoint" button
+
+═══════════════════════════════════════════════════════════════
+
+🎯 MINIMUM REQUIRED: success_payment
+
+This is the ONLY event you absolutely need for payments to work!
+
+═══════════════════════════════════════════════════════════════
