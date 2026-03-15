@@ -818,7 +818,7 @@ Respond ONLY with valid JSON in this exact format:
             customer_phone: user.phone || "9999999999",
           },
           order_meta: {
-            return_url: `https://ideawin-platform.vercel.app/payment-status`,
+            return_url: `https://ideawin-platform.vercel.app/payment-status?order_id={order_id}`,
             notify_url: `https://ideawin-platform.vercel.app/api/payments/webhook`,
           },
         };
@@ -976,6 +976,23 @@ Respond ONLY with valid JSON in this exact format:
       } catch (error) {
         console.error('Error fetching payment status:', error);
         return res.status(500).json({ error: 'Failed to fetch payment status' });
+      }
+    }
+
+    // Get user's payments
+    if (path === '/payments/my-payments' && method === 'GET') {
+      if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+      
+      try {
+        const payments = await sql`
+          SELECT * FROM payments 
+          WHERE user_id = ${userId} 
+          ORDER BY created_at DESC
+        `;
+        return res.status(200).json(payments);
+      } catch (error) {
+        console.error('Error fetching user payments:', error);
+        return res.status(500).json({ error: 'Failed to fetch payments' });
       }
     }
 

@@ -27,15 +27,40 @@ const PaymentStatus = () => {
       
       // Get order ID from URL params
       const urlParams = new URLSearchParams(window.location.search);
-      const orderId = urlParams.get('order_id');
+      let orderId = urlParams.get('order_id');
       
       console.log('Order ID from URL:', orderId);
       
+      // If no order_id in URL, try to get it from user's pending payment
       if (!orderId) {
-        console.error('No order ID in URL');
-        toast.error('Invalid payment session');
-        setTimeout(() => navigate('/dashboard'), 2000);
-        return;
+        console.log('No order_id in URL, fetching from user data...');
+        try {
+          const userResponse = await api.get('/auth/me', {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          
+          // Find the most recent payment record
+          const paymentsResponse = await api.get('/payments/my-payments', {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          
+          const pendingPayment = paymentsResponse.data.find((p: any) => p.status === 'pending');
+          
+          if (pendingPayment) {
+            orderId = pendingPayment.order_id;
+            console.log('Found pending payment order_id:', orderId);
+          } else {
+            console.error('No pending payment found');
+            toast.error('No pending payment found');
+            setTimeout(() => navigate('/dashboard'), 2000);
+            return;
+          }
+        } catch (fetchError) {
+          console.error('Failed to fetch user payment data:', fetchError);
+          toast.error('Unable to verify payment');
+          setTimeout(() => navigate('/dashboard'), 2000);
+          return;
+        }
       }
       
       // Call backend to verify with Cashfree directly
