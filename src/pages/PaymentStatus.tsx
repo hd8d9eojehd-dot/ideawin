@@ -84,11 +84,11 @@ const PaymentStatus = () => {
         toast.success('Payment verified! Your idea is registered.');
         setTimeout(() => navigate('/dashboard'), 2000);
         return;
-      } else if (response.data.status === 'pending' && attempt < 15) {
-        // Still processing, retry
+      } else if (response.data.status === 'pending' && attempt < 10) {
+        // Still processing, retry (reduced from 15 to 10 attempts)
         console.log('Payment still processing, retrying...');
-        setVerificationMessage(`Payment processing (${attempt}/15)...`);
-        setTimeout(() => verifyPayment(attempt + 1), 3000);
+        setVerificationMessage(`Payment processing (${attempt}/10)...`);
+        setTimeout(() => verifyPayment(attempt + 1), 4000); // Increased delay to 4 seconds
         return;
       } else if (response.data.status === 'failed') {
         // Payment failed
@@ -99,9 +99,9 @@ const PaymentStatus = () => {
         setTimeout(() => navigate('/dashboard'), 3000);
         return;
       } else {
-        // Timeout or unknown status
-        console.log('⏱️ Verification timeout');
-        toast('Payment is being processed. Check your dashboard in a few minutes.', {
+        // Timeout or max retries reached
+        console.log('⏱️ Verification timeout or max retries reached');
+        toast('Payment is being processed. Please check your dashboard in a few minutes.', {
           icon: '⏳',
           duration: 5000
         });

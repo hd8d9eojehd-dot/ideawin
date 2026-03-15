@@ -1051,7 +1051,7 @@ Respond ONLY with valid JSON in this exact format:
               'x-client-secret': CASHFREE_SECRET_KEY,
               'x-api-version': '2023-08-01'
             },
-            timeout: 10000
+            timeout: 8000 // 8 second timeout
           });
 
           const orderStatus = orderResponse.data.order_status;
@@ -1129,12 +1129,46 @@ Respond ONLY with valid JSON in this exact format:
 
         } catch (cfError) {
           console.error('=== CASHFREE API ERROR ===');
-          console.error('Error:', cfError.message);
+          console.error('Error code:', cfError.code);
+          console.error('Error message:', cfError.message);
+          console.error('Response status:', cfError.response?.status);
           
+          // If Cashfree API fails, check database for webhook update
+          console.log('Cashfree API failed, checking database for webhook update...');
+          
+          // Re-fetch payment to see if webhook updated it
+          const updatedPayment = await Payment.findByOrderId(orderId, userId);
+          
+          if (updatedPayment && updatedPayment.status === 'paid') {
+            console.log('✅ Payment was updated by webhook!');
+            return res.status(200).json({ 
+              success: true, 
+              status: 'paid',
+              message: 'Payment verified via webhook'
+            });
+          }
+          
+          // Check if submission was updated by webhook
+          const submissions = await Submission.findByUserId(userId);
+          const paidSubmission = submissions.find(s => 
+            (s.payment_status === 'paid' || s.paymentStatus === 'paid')
+          );
+          
+          if (paidSubmission) {
+            console.log('✅ Submission is paid (webhook updated it)');
+            return res.status(200).json({ 
+              success: true, 
+              status: 'paid',
+              message: 'Payment verified via webhook'
+            });
+          }
+          
+          // API failed and no webhook update yet - return pending for retry
           return res.status(200).json({ 
             success: false, 
             status: 'pending',
-            message: 'Unable to verify payment status'
+            message: 'Verification in progress, please wait...',
+            apiError: true
           });
         }
         
