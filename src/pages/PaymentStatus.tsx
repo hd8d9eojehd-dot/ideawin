@@ -93,51 +93,62 @@ const PaymentStatus = () => {
 
     try {
       setVerificationMessage(`Confirming payment (${attempt}/30)...`);
-      console.log(`Polling attempt ${attempt}/30 for order:`, orderId);
+      console.log(`=== POLLING ATTEMPT ${attempt}/30 ===`);
+      console.log('Looking for order:', orderId);
       
       // Check database for updated status (webhook updates this)
       const userResponse = await api.get('/auth/me', {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      console.log('Current submissions:', userResponse.data.submissions);
+      const allSubmissions = userResponse.data.submissions || [];
+      console.log('Total submissions:', allSubmissions.length);
+      console.log('All submissions:', JSON.stringify(allSubmissions, null, 2));
       
-      // Try multiple ways to find the submission
-      let submission = userResponse.data.submissions?.find((s: any) => 
+      // Strategy 1: Find by exact payment_id match
+      let submission = allSubmissions.find((s: any) => 
         (s.payment_id === orderId || s.paymentId === orderId)
       );
       
-      // If not found by payment_id, check if there's any pending submission
-      if (!submission) {
-        submission = userResponse.data.submissions?.find((s: any) => 
+      if (submission) {
+        console.log('✓ Found submission by payment_id:', submission.id);
+      } else {
+        console.log('✗ No submission found by payment_id');
+        
+        // Strategy 2: Find any pending submission (likely ours)
+        submission = allSubmissions.find((s: any) => 
           s.payment_status === 'pending' || s.paymentStatus === 'pending'
         );
-        console.log('Found pending submission (fallback):', submission);
+        
+        if (submission) {
+          console.log('✓ Found pending submission (fallback):', submission.id);
+        }
       }
       
-      // Also check if there's a newly paid submission (webhook might have updated it)
-      const anyPaidSubmission = userResponse.data.submissions?.find((s: any) => 
-        s.payment_status === 'paid' || s.paymentStatus === 'paid'
-      );
-      
-      if (anyPaidSubmission && attempt > 3) {
-        // If we find a paid submission after a few attempts, assume it's ours
-        console.log('✅ Found paid submission - assuming payment successful!');
-        setStatus('success');
-        await refreshUser();
-        toast.success('Payment verified! Your idea is registered.');
-        setTimeout(() => navigate('/dashboard'), 2000);
-        return;
+      // Strategy 3: After 5 attempts, check if ANY submission became paid
+      // (This handles webhook updating without exact payment_id match)
+      if (attempt >= 5) {
+        const paidSubmission = allSubmissions.find((s: any) => 
+          s.payment_status === 'paid' || s.paymentStatus === 'paid'
+        );
+        
+        if (paidSubmission) {
+          console.log('✅ Found PAID submission - assuming payment successful!');
+          console.log('Paid submission:', paidSubmission);
+          setStatus('success');
+          await refreshUser();
+          toast.success('Payment verified! Your idea is registered.');
+          setTimeout(() => navigate('/dashboard'), 2000);
+          return;
+        }
       }
       
-      console.log('Found submission:', submission);
-      
+      // Check current submission status
       if (submission) {
         const paymentStatus = submission.payment_status || submission.paymentStatus;
-        console.log('Payment status:', paymentStatus);
+        console.log('Current payment status:', paymentStatus);
         
         if (paymentStatus === 'paid') {
-          // Webhook updated the status!
           console.log('✅ Payment verified as PAID!');
           setStatus('success');
           await refreshUser();
@@ -145,47 +156,27 @@ const PaymentStatus = () => {
           setTimeout(() => navigate('/dashboard'), 2000);
           return;
         } else if (paymentStatus === 'failed') {
-          // Payment failed
           console.log('❌ Payment marked as FAILED');
           setStatus('failed');
           setErrorMessage('Payment was not successful.');
           toast.error('Payment failed');
           setTimeout(() => navigate('/dashboard'), 3000);
           return;
+        } else {
+          console.log('⏳ Payment still pending...');
         }
-      }
-      
-      // After 10 attempts, try calling mark-paid endpoint as fallback
-      if (attempt === 10) {
-        console.log('Attempting manual verification via mark-paid endpoint...');
-        try {
-          const markPaidResponse = await api.post('/payments/mark-paid', 
-            { orderId },
-            { headers: { Authorization: `Bearer ${token}` } }
-          );
-          console.log('Mark-paid response:', markPaidResponse.data);
-          
-          if (markPaidResponse.data.success) {
-            console.log('✅ Payment verified via mark-paid!');
-            setStatus('success');
-            await refreshUser();
-            toast.success('Payment verified! Your idea is registered.');
-            setTimeout(() => navigate('/dashboard'), 2000);
-            return;
-          }
-        } catch (markPaidError) {
-          console.log('Mark-paid attempt failed:', markPaidError);
-        }
+      } else {
+        console.log('⚠️ No submission found at all');
       }
       
       // Still pending, poll again every 2 seconds
-      console.log('Still pending, polling again in 2s...');
+      console.log('Polling again in 2s...');
       setTimeout(() => {
         startDatabasePolling(orderId, attempt + 1);
       }, 2000);
       
     } catch (error) {
-      console.error('Database polling error:', error);
+      console.error('❌ Database polling error:', error);
       // Retry polling on error
       setTimeout(() => {
         startDatabasePolling(orderId, attempt + 1);
