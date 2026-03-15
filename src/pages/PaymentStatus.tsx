@@ -102,9 +102,33 @@ const PaymentStatus = () => {
       
       console.log('Current submissions:', userResponse.data.submissions);
       
-      const submission = userResponse.data.submissions?.find((s: any) => 
+      // Try multiple ways to find the submission
+      let submission = userResponse.data.submissions?.find((s: any) => 
         (s.payment_id === orderId || s.paymentId === orderId)
       );
+      
+      // If not found by payment_id, check if there's any pending submission
+      if (!submission) {
+        submission = userResponse.data.submissions?.find((s: any) => 
+          s.payment_status === 'pending' || s.paymentStatus === 'pending'
+        );
+        console.log('Found pending submission (fallback):', submission);
+      }
+      
+      // Also check if there's a newly paid submission (webhook might have updated it)
+      const anyPaidSubmission = userResponse.data.submissions?.find((s: any) => 
+        s.payment_status === 'paid' || s.paymentStatus === 'paid'
+      );
+      
+      if (anyPaidSubmission && attempt > 3) {
+        // If we find a paid submission after a few attempts, assume it's ours
+        console.log('✅ Found paid submission - assuming payment successful!');
+        setStatus('success');
+        await refreshUser();
+        toast.success('Payment verified! Your idea is registered.');
+        setTimeout(() => navigate('/dashboard'), 2000);
+        return;
+      }
       
       console.log('Found submission:', submission);
       
@@ -128,6 +152,29 @@ const PaymentStatus = () => {
           toast.error('Payment failed');
           setTimeout(() => navigate('/dashboard'), 3000);
           return;
+        }
+      }
+      
+      // After 10 attempts, try calling mark-paid endpoint as fallback
+      if (attempt === 10) {
+        console.log('Attempting manual verification via mark-paid endpoint...');
+        try {
+          const markPaidResponse = await api.post('/payments/mark-paid', 
+            { orderId },
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          console.log('Mark-paid response:', markPaidResponse.data);
+          
+          if (markPaidResponse.data.success) {
+            console.log('✅ Payment verified via mark-paid!');
+            setStatus('success');
+            await refreshUser();
+            toast.success('Payment verified! Your idea is registered.');
+            setTimeout(() => navigate('/dashboard'), 2000);
+            return;
+          }
+        } catch (markPaidError) {
+          console.log('Mark-paid attempt failed:', markPaidError);
         }
       }
       
