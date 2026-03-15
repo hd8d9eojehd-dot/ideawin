@@ -1151,27 +1151,14 @@ Respond ONLY with valid JSON in this exact format:
           console.error('Message:', cfError.message);
           console.error('Full error:', JSON.stringify(cfError, null, 2));
           
-          // If Cashfree API fails, assume payment is pending (webhook will update)
-          // This provides better UX - user sees success, webhook handles actual verification
-          console.log('⚠️ Cashfree API unavailable, marking as paid for UX (webhook will verify)');
-          
-          // Mark as paid to avoid user frustration
-          await sql`
-            UPDATE payments 
-            SET status = 'paid', updated_at = CURRENT_TIMESTAMP
-            WHERE order_id = ${orderId} AND user_id = ${userId}
-          `;
-          
-          await sql`
-            UPDATE submissions 
-            SET payment_status = 'paid'
-            WHERE user_id = ${userId} AND payment_status = 'pending'
-          `;
+          // If Cashfree API fails, return pending status (don't mark as paid)
+          // Webhook will handle the actual verification
+          console.log('⚠️ Cashfree API unavailable, returning pending status');
           
           return res.status(200).json({ 
-            success: true, 
-            message: 'Payment received! Verification in progress.',
-            verified: true,
+            success: false, 
+            message: 'Payment verification in progress. Please wait...',
+            status: 'pending',
             note: 'Webhook will confirm final status'
           });
         }

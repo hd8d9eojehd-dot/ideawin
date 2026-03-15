@@ -23,7 +23,7 @@ const PaymentStatus = () => {
 
     try {
       console.log('Verifying payment, attempt:', attempt);
-      setVerificationMessage(`Verifying payment (attempt ${attempt}/3)...`);
+      setVerificationMessage(`Checking payment status (${attempt}/10)...`);
       
       // Get user's pending submission
       const userResponse = await api.get('/auth/me', {
@@ -45,7 +45,7 @@ const PaymentStatus = () => {
         if (paidSubmission) {
           setStatus('success');
           await refreshUser();
-          toast.success('Payment already verified!');
+          toast.success('Payment verified!');
           setTimeout(() => navigate('/dashboard'), 2000);
         } else {
           toast('No pending payment found', { icon: 'ℹ️' });
@@ -57,19 +57,19 @@ const PaymentStatus = () => {
       const pendingOrderId = pendingSubmission.payment_id || pendingSubmission.paymentId;
       console.log('Verifying payment for order:', pendingOrderId);
       
-      // Use auto-complete endpoint which has better error handling
+      // Try Cashfree API verification first
       const response = await api.post('/payments/auto-complete', 
         { orderId: pendingOrderId },
         { 
           headers: { Authorization: `Bearer ${token}` },
-          timeout: 30000 // 30 second timeout
+          timeout: 30000
         }
       );
       
       console.log('Payment verification response:', response.data);
       
-      if (response.data.success) {
-        // Payment verified successfully
+      if (response.data.success && response.data.verified) {
+        // Payment confirmed by Cashfree API
         setStatus('success');
         await refreshUser();
         toast.success('Payment verified! Your idea is registered.');
@@ -78,26 +78,21 @@ const PaymentStatus = () => {
           navigate('/dashboard');
         }, 2000);
         
-      } else if (response.data.status === 'pending' && attempt < 3) {
-        // Payment still processing, retry after delay
-        console.log('Payment pending, retrying in 4 seconds...');
+      } else if (response.data.status === 'pending' && attempt < 10) {
+        // Payment still processing - retry with increasing delay
+        const delay = Math.min(2000 + (attempt * 500), 5000); // 2s to 5s
+        console.log(`Payment pending, retrying in ${delay}ms...`);
         setVerificationMessage('Payment is being processed, please wait...');
         
         setTimeout(() => {
           verifyPayment(attempt + 1);
-        }, 4000);
+        }, delay);
         
-      } else if (response.data.status === 'pending' && attempt >= 3) {
-        // Max retries reached, show success anyway (webhook will update)
-        setStatus('success');
-        await refreshUser();
-        toast('Payment is being processed. Your submission is saved!', { 
-          icon: '✅',
-          duration: 5000 
-        });
-        setTimeout(() => {
-          navigate('/dashboard');
-        }, 2000);
+      } else if (response.data.status === 'pending' && attempt >= 10) {
+        // Max retries reached - start polling database (webhook will update)
+        console.log('Switching to database polling...');
+        setVerificationMessage('Finalizing payment verification...');
+        startDatabasePolling(pendingOrderId, 1);
         
       } else if (response.data.status === 'failed') {
         // Payment failed
@@ -110,45 +105,98 @@ const PaymentStatus = () => {
         }, 3000);
         
       } else {
-        // Unknown status or error - assume success for better UX
-        console.log('Unknown status, assuming success for UX');
-        setStatus('success');
-        await refreshUser();
-        toast('Payment received! Verification in progress.', { icon: '✅' });
-        
-        setTimeout(() => {
-          navigate('/dashboard');
-        }, 2000);
+        // Unknown status - poll database
+        console.log('Unknown status, polling database...');
+        startDatabasePolling(pendingOrderId, 1);
       }
     } catch (error: any) {
       console.error('Error verifying payment:', error);
       
       // On error, retry if attempts remaining
-      if (attempt < 3) {
+      if (attempt < 10) {
+        const delay = Math.min(2000 + (attempt * 500), 5000);
         console.log('Error occurred, retrying...');
         setTimeout(() => {
           verifyPayment(attempt + 1);
-        }, 4000);
+        }, delay);
       } else {
-        // After 3 attempts, assume success (webhook will handle actual verification)
-        console.log('Max retries reached, assuming success for UX');
-        setStatus('success');
-        await refreshUser();
-        toast('Payment received! Check your dashboard for status.', { icon: '✅' });
+        // After 10 attempts, poll database
+        console.log('Max API retries reached, polling database...');
+        const pendingSubmission = (await api.get('/auth/me', {
+          headers: { Authorization: `Bearer ${token}` }
+        })).data.submissions?.find((s: any) => 
+          s.payment_status === 'pending' || s.paymentStatus === 'pending'
+        );
         
-        setTimeout(() => {
-          navigate('/dashboard');
-        }, 2000);
+        if (pendingSubmission) {
+          const orderId = pendingSubmission.payment_id || pendingSubmission.paymentId;
+          startDatabasePolling(orderId, 1);
+        } else {
+          setStatus('failed');
+          setErrorMessage('Unable to verify payment. Please check your dashboard.');
+          toast.error('Verification timeout');
+          setTimeout(() => navigate('/dashboard'), 3000);
+        }
       }
     }
   };
 
+  const startDatabasePolling = async (orderId: string, attempt: number) => {
+    if (attempt > 15) {
+      // After 15 polls (30 seconds), give up
+      toast('Payment is being processed. Check your dashboard in a few minutes.', {
+        icon: '⏳',
+        duration: 5000
+      });
+      setTimeout(() => navigate('/dashboard'), 3000);
+      return;
+    }
+
+    try {
+      setVerificationMessage(`Waiting for payment confirmation (${attempt}/15)...`);
+      
+      // Check database for updated status
+      const userResponse = await api.get('/auth/me', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      const submission = userResponse.data.submissions?.find((s: any) => 
+        (s.payment_id === orderId || s.paymentId === orderId)
+      );
+      
+      if (submission && (submission.payment_status === 'paid' || submission.paymentStatus === 'paid')) {
+        // Webhook updated the status!
+        setStatus('success');
+        await refreshUser();
+        toast.success('Payment verified! Your idea is registered.');
+        setTimeout(() => navigate('/dashboard'), 2000);
+      } else if (submission && (submission.payment_status === 'failed' || submission.paymentStatus === 'failed')) {
+        // Payment failed
+        setStatus('failed');
+        setErrorMessage('Payment was not successful.');
+        toast.error('Payment failed');
+        setTimeout(() => navigate('/dashboard'), 3000);
+      } else {
+        // Still pending, poll again
+        setTimeout(() => {
+          startDatabasePolling(orderId, attempt + 1);
+        }, 2000);
+      }
+    } catch (error) {
+      console.error('Database polling error:', error);
+      // Retry polling
+      setTimeout(() => {
+        startDatabasePolling(orderId, attempt + 1);
+      }, 2000);
+    }
+  };
+
   useEffect(() => {
-    // Wait 3 seconds before first verification attempt
+    // Wait 5 seconds before first verification attempt
     // This gives Cashfree time to process the payment
     const timer = setTimeout(() => {
       verifyPayment(1);
-    }, 3000);
+    }, 5000);
     
     return () => clearTimeout(timer);
   }, []);
