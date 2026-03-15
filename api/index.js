@@ -854,21 +854,50 @@ Respond ONLY with valid JSON in this exact format:
         if (submissionData) {
           const { title, problem, solution, market, impact } = submissionData;
           
+          console.log('=== CREATING SUBMISSION ===');
+          console.log('Submission data:', { title, problem, solution, market, impact });
+          console.log('Payment status: pending');
+          console.log('Payment ID:', orderId);
+          
           // Only create if doesn't exist
           if (!existingSubmission) {
-            await Submission.create({
-              userId,
-              competitionId,
-              title,
-              problem,
-              solution,
-              market,
-              impact,
-              paymentStatus: 'pending',
-              paymentId: orderId
-            });
-            console.log('✅ Submission created with pending payment status');
+            try {
+              const newSubmission = await Submission.create({
+                userId,
+                competitionId,
+                title,
+                problem,
+                solution,
+                market,
+                impact,
+                paymentStatus: 'pending',
+                paymentId: orderId
+              });
+              console.log('✅ Submission created successfully!');
+              console.log('Submission ID:', newSubmission.id);
+              console.log('Submission payment_id:', newSubmission.payment_id);
+              console.log('Submission payment_status:', newSubmission.payment_status);
+            } catch (submissionError) {
+              console.error('❌ Failed to create submission:', submissionError);
+              console.error('Submission error details:', submissionError.message);
+              console.error('Submission error stack:', submissionError.stack);
+              // Don't fail the payment order creation, but log the error
+            }
+          } else {
+            console.log('⚠️ Submission already exists, updating payment info');
+            try {
+              await sql`
+                UPDATE submissions 
+                SET payment_status = 'pending', payment_id = ${orderId}
+                WHERE id = ${existingSubmission.id}
+              `;
+              console.log('✅ Existing submission updated with payment info');
+            } catch (updateError) {
+              console.error('❌ Failed to update existing submission:', updateError);
+            }
           }
+        } else {
+          console.log('⚠️ No submission data provided - submission not created');
         }
 
         console.log('✅ Payment record saved to database');

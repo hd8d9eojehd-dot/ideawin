@@ -227,17 +227,29 @@ const Submission = {
   },
 
   async create(data) {
-    const result = await sql`
-      INSERT INTO submissions (
-        user_id, competition_id, title, problem, solution, market, impact, payment_status, payment_id
-      ) VALUES (
-        ${data.userId}, ${data.competitionId}, ${data.title}, 
-        ${data.problem}, ${data.solution}, ${data.market}, ${data.impact},
-        ${data.paymentStatus || 'pending'}, ${data.paymentId || null}
-      )
-      RETURNING *
-    `;
-    return result[0];
+    console.log('=== Submission.create called ===');
+    console.log('Data:', JSON.stringify(data, null, 2));
+    
+    try {
+      const result = await sql`
+        INSERT INTO submissions (
+          user_id, competition_id, title, problem, solution, market, impact, payment_status, payment_id
+        ) VALUES (
+          ${data.userId}, ${data.competitionId}, ${data.title}, 
+          ${data.problem}, ${data.solution}, ${data.market}, ${data.impact},
+          ${data.paymentStatus || 'pending'}, ${data.paymentId || null}
+        )
+        RETURNING *
+      `;
+      console.log('✅ Submission inserted successfully');
+      console.log('Result:', JSON.stringify(result[0], null, 2));
+      return result[0];
+    } catch (error) {
+      console.error('❌ Submission.create failed:', error);
+      console.error('Error message:', error.message);
+      console.error('Error code:', error.code);
+      throw error;
+    }
   },
 
   async updateScore(id, data) {
