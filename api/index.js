@@ -512,6 +512,7 @@ Respond ONLY with valid JSON in this exact format:
     if (path === '/payments/webhook' && method === 'POST') {
       try {
         console.log('=== WEBHOOK RECEIVED ===');
+        console.log('Timestamp:', new Date().toISOString());
         console.log('Webhook body:', JSON.stringify(req.body, null, 2));
         
         const webhookData = req.body;
@@ -524,7 +525,7 @@ Respond ONLY with valid JSON in this exact format:
         const paymentMode = eventData.payment?.payment_group || eventData.paymentMode || eventData.payment_mode;
         const referenceId = eventData.payment?.cf_payment_id || eventData.referenceId || eventData.reference_id;
         
-        console.log('Parsed webhook data:', { orderId, txStatus, paymentMode, referenceId });
+        console.log('Parsed webhook data:', { orderId, txStatus, paymentMode, referenceId, orderAmount });
         
         if (!orderId) {
           console.error('❌ Invalid webhook data - no orderId found');
@@ -544,17 +545,19 @@ Respond ONLY with valid JSON in this exact format:
           webhookData: JSON.stringify(webhookData)
         });
 
-        console.log('✅ Payment record updated');
+        console.log('✅ Payment record updated in database');
 
         // If payment successful, update submission status
         if (status === 'paid') {
+          console.log('Payment is PAID - updating submission...');
+          
           // Find payment without userId requirement for webhook
           const paymentResult = await sql`
             SELECT * FROM payments WHERE order_id = ${orderId} LIMIT 1
           `;
           const payment = paymentResult[0];
           
-          console.log('Payment record:', payment ? 'Found' : 'Not found');
+          console.log('Payment record:', payment ? `Found (user_id: ${payment.user_id})` : 'Not found');
           
           if (payment) {
             const submissions = await Submission.findByUserId(payment.user_id);
@@ -565,17 +568,30 @@ Respond ONLY with valid JSON in this exact format:
               (s.payment_id === orderId || s.paymentId === orderId)
             );
             
+            console.log('Pending submission:', pendingSubmission ? `Found (id: ${pendingSubmission.id})` : 'Not found');
+            
             if (pendingSubmission) {
               await sql`
                 UPDATE submissions 
-                SET payment_status = 'paid', payment_id = ${referenceId}
+                SET payment_status = 'paid', payment_id = ${referenceId}, updated_at = CURRENT_TIMESTAMP
                 WHERE id = ${pendingSubmission.id}
               `;
-              console.log('✅ Submission status updated to paid');
+              console.log('✅ Submission status updated to PAID');
+              
+              // Verify the update
+              const verifyResult = await sql`
+                SELECT payment_status FROM submissions WHERE id = ${pendingSubmission.id}
+              `;
+              console.log('Verified submission status:', verifyResult[0]?.payment_status);
             } else {
-              console.log('⚠️ No matching pending submission found');
+              console.log('⚠️ No matching pending submission found for order:', orderId);
+              console.log('All user submissions:', JSON.stringify(submissions, null, 2));
             }
+          } else {
+            console.log('⚠️ Payment record not found in database for order:', orderId);
           }
+        } else {
+          console.log('Payment status is not PAID, skipping submission update');
         }
 
         console.log('=== WEBHOOK PROCESSED SUCCESSFULLY ===');
@@ -583,6 +599,7 @@ Respond ONLY with valid JSON in this exact format:
       } catch (error) {
         console.error('=== WEBHOOK PROCESSING ERROR ===');
         console.error('Error:', error);
+        console.error('Stack:', error.stack);
         return res.status(500).json({ error: 'Webhook processing failed' });
       }
     }
