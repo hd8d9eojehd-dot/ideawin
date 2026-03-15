@@ -22,54 +22,74 @@ const PaymentStatus = () => {
     }
 
     try {
-      console.log('=== PAYMENT VERIFICATION START ===');
+      console.log('=== DIRECT CASHFREE VERIFICATION ===');
       console.log('Attempt:', attempt);
       
-      // Get user's current data
-      const userResponse = await api.get('/auth/me', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      // Get order ID from URL params
+      const urlParams = new URLSearchParams(window.location.search);
+      const orderId = urlParams.get('order_id');
       
-      console.log('User submissions:', userResponse.data.submissions);
+      console.log('Order ID from URL:', orderId);
       
-      const pendingSubmission = userResponse.data.submissions?.find((s: any) => 
-        s.payment_status === 'pending' || s.paymentStatus === 'pending'
-      );
-      
-      const paidSubmission = userResponse.data.submissions?.find((s: any) => 
-        s.payment_status === 'paid' || s.paymentStatus === 'paid'
-      );
-      
-      // Check if payment is already verified
-      if (paidSubmission && !pendingSubmission) {
-        console.log('✅ Payment already verified!');
-        setStatus('success');
-        await refreshUser();
-        toast.success('Payment verified!');
+      if (!orderId) {
+        console.error('No order ID in URL');
+        toast.error('Invalid payment session');
         setTimeout(() => navigate('/dashboard'), 2000);
         return;
       }
       
-      if (!pendingSubmission) {
-        console.log('No pending submission found');
-        toast('No pending payment found', { icon: 'ℹ️' });
-        setTimeout(() => navigate('/dashboard'), 1500);
+      // Call backend to verify with Cashfree directly
+      setVerificationMessage('Verifying payment with Cashfree...');
+      
+      const response = await api.post('/payments/verify-direct', 
+        { orderId },
+        { 
+          headers: { Authorization: `Bearer ${token}` },
+          timeout: 15000
+        }
+      );
+      
+      console.log('Verification response:', response.data);
+      
+      if (response.data.success && response.data.status === 'paid') {
+        // Payment verified and updated
+        console.log('✅ Payment verified successfully!');
+        setStatus('success');
+        await refreshUser();
+        toast.success('Payment verified! Your idea is registered.');
+        setTimeout(() => navigate('/dashboard'), 2000);
+        return;
+      } else if (response.data.status === 'pending' && attempt < 15) {
+        // Still processing, retry
+        console.log('Payment still processing, retrying...');
+        setVerificationMessage(`Payment processing (${attempt}/15)...`);
+        setTimeout(() => verifyPayment(attempt + 1), 3000);
+        return;
+      } else if (response.data.status === 'failed') {
+        // Payment failed
+        console.log('❌ Payment failed');
+        setStatus('failed');
+        setErrorMessage('Payment was not successful.');
+        toast.error('Payment failed');
+        setTimeout(() => navigate('/dashboard'), 3000);
+        return;
+      } else {
+        // Timeout or unknown status
+        console.log('⏱️ Verification timeout');
+        toast('Payment is being processed. Check your dashboard in a few minutes.', {
+          icon: '⏳',
+          duration: 5000
+        });
+        setTimeout(() => navigate('/dashboard'), 3000);
         return;
       }
-
-      const pendingOrderId = pendingSubmission.payment_id || pendingSubmission.paymentId;
-      console.log('Pending order ID:', pendingOrderId);
-      
-      // Start database polling immediately (webhook updates database)
-      startDatabasePolling(pendingOrderId, 1);
       
     } catch (error: any) {
-      console.error('Error in verifyPayment:', error);
+      console.error('❌ Verification error:', error);
       
-      // On error, retry a few times
-      if (attempt < 3) {
+      if (attempt < 5) {
         console.log('Retrying verification...');
-        setTimeout(() => verifyPayment(attempt + 1), 2000);
+        setTimeout(() => verifyPayment(attempt + 1), 3000);
       } else {
         setStatus('failed');
         setErrorMessage('Unable to verify payment. Please check your dashboard.');
@@ -80,118 +100,14 @@ const PaymentStatus = () => {
   };
 
   const startDatabasePolling = async (orderId: string, attempt: number) => {
-    if (attempt > 30) {
-      // After 30 polls (60 seconds), give up
-      console.log('⏱️ Polling timeout reached');
-      toast('Payment is being processed. Check your dashboard in a few minutes.', {
-        icon: '⏳',
-        duration: 5000
-      });
-      setTimeout(() => navigate('/dashboard'), 3000);
-      return;
-    }
-
-    try {
-      setVerificationMessage(`Confirming payment (${attempt}/30)...`);
-      console.log(`=== POLLING ATTEMPT ${attempt}/30 ===`);
-      console.log('Looking for order:', orderId);
-      
-      // Check database for updated status (webhook updates this)
-      const userResponse = await api.get('/auth/me', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      
-      const allSubmissions = userResponse.data.submissions || [];
-      console.log('Total submissions:', allSubmissions.length);
-      console.log('All submissions:', JSON.stringify(allSubmissions, null, 2));
-      
-      // Strategy 1: Find by exact payment_id match
-      let submission = allSubmissions.find((s: any) => 
-        (s.payment_id === orderId || s.paymentId === orderId)
-      );
-      
-      if (submission) {
-        console.log('✓ Found submission by payment_id:', submission.id);
-      } else {
-        console.log('✗ No submission found by payment_id');
-        
-        // Strategy 2: Find any pending submission (likely ours)
-        submission = allSubmissions.find((s: any) => 
-          s.payment_status === 'pending' || s.paymentStatus === 'pending'
-        );
-        
-        if (submission) {
-          console.log('✓ Found pending submission (fallback):', submission.id);
-        }
-      }
-      
-      // Strategy 3: After 5 attempts, check if ANY submission became paid
-      // (This handles webhook updating without exact payment_id match)
-      if (attempt >= 5) {
-        const paidSubmission = allSubmissions.find((s: any) => 
-          s.payment_status === 'paid' || s.paymentStatus === 'paid'
-        );
-        
-        if (paidSubmission) {
-          console.log('✅ Found PAID submission - assuming payment successful!');
-          console.log('Paid submission:', paidSubmission);
-          setStatus('success');
-          await refreshUser();
-          toast.success('Payment verified! Your idea is registered.');
-          setTimeout(() => navigate('/dashboard'), 2000);
-          return;
-        }
-      }
-      
-      // Check current submission status
-      if (submission) {
-        const paymentStatus = submission.payment_status || submission.paymentStatus;
-        console.log('Current payment status:', paymentStatus);
-        
-        if (paymentStatus === 'paid') {
-          console.log('✅ Payment verified as PAID!');
-          setStatus('success');
-          await refreshUser();
-          toast.success('Payment verified! Your idea is registered.');
-          setTimeout(() => navigate('/dashboard'), 2000);
-          return;
-        } else if (paymentStatus === 'failed') {
-          console.log('❌ Payment marked as FAILED');
-          setStatus('failed');
-          setErrorMessage('Payment was not successful.');
-          toast.error('Payment failed');
-          setTimeout(() => navigate('/dashboard'), 3000);
-          return;
-        } else {
-          console.log('⏳ Payment still pending...');
-        }
-      } else {
-        console.log('⚠️ No submission found at all');
-      }
-      
-      // Still pending, poll again every 2 seconds
-      console.log('Polling again in 2s...');
-      setTimeout(() => {
-        startDatabasePolling(orderId, attempt + 1);
-      }, 2000);
-      
-    } catch (error) {
-      console.error('❌ Database polling error:', error);
-      // Retry polling on error
-      setTimeout(() => {
-        startDatabasePolling(orderId, attempt + 1);
-      }, 2000);
-    }
+    // This function is no longer used with direct verification
+    // Kept for backwards compatibility
+    console.log('Database polling called but not used with direct verification');
   };
 
   useEffect(() => {
-    // Wait 2 seconds before starting verification
-    // This gives Cashfree webhook time to hit our server
-    const timer = setTimeout(() => {
-      verifyPayment(1);
-    }, 2000);
-    
-    return () => clearTimeout(timer);
+    // Start verification immediately
+    verifyPayment(1);
   }, []);
 
   return (

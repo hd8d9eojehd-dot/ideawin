@@ -979,6 +979,159 @@ Respond ONLY with valid JSON in this exact format:
       }
     }
 
+    // Direct payment verification - calls Cashfree API and updates submission immediately
+    if (path === '/payments/verify-direct' && method === 'POST') {
+      if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+      
+      try {
+        const { orderId } = req.body;
+        
+        console.log('=== DIRECT PAYMENT VERIFICATION ===');
+        console.log('Order ID:', orderId);
+        console.log('User ID:', userId);
+        console.log('Timestamp:', new Date().toISOString());
+        
+        if (!orderId) {
+          return res.status(400).json({ 
+            success: false,
+            error: 'Order ID is required' 
+          });
+        }
+
+        // Get payment record
+        const payment = await Payment.findByOrderId(orderId, userId);
+        if (!payment) {
+          console.log('❌ Payment record not found');
+          return res.status(404).json({ 
+            success: false,
+            error: 'Payment record not found' 
+          });
+        }
+
+        console.log('Payment record found, current status:', payment.status);
+
+        // If already paid, return success
+        if (payment.status === 'paid') {
+          console.log('✅ Payment already verified');
+          return res.status(200).json({ 
+            success: true, 
+            status: 'paid',
+            message: 'Payment already verified'
+          });
+        }
+
+        // Verify with Cashfree API
+        const CASHFREE_APP_ID = (process.env.CASHFREE_APP_ID || '').trim();
+        const CASHFREE_SECRET_KEY = (process.env.CASHFREE_SECRET_KEY || '').trim();
+        const CASHFREE_BASE_URL = "https://api.cashfree.com/pg";
+
+        console.log('Calling Cashfree API...');
+
+        try {
+          const orderResponse = await axios.get(`${CASHFREE_BASE_URL}/orders/${orderId}`, {
+            headers: {
+              'x-client-id': CASHFREE_APP_ID,
+              'x-client-secret': CASHFREE_SECRET_KEY,
+              'x-api-version': '2023-08-01'
+            },
+            timeout: 10000
+          });
+
+          const orderStatus = orderResponse.data.order_status;
+          console.log('Cashfree order status:', orderStatus);
+
+          if (orderStatus === 'PAID') {
+            console.log('✅ Payment confirmed as PAID by Cashfree');
+
+            // Update payment status
+            await sql`
+              UPDATE payments 
+              SET 
+                status = 'paid',
+                cf_payment_id = ${orderResponse.data.cf_order_id || orderId},
+                updated_at = CURRENT_TIMESTAMP
+              WHERE order_id = ${orderId} AND user_id = ${userId}
+            `;
+
+            // Find and update submission
+            const submissions = await Submission.findByUserId(userId);
+            console.log('User has', submissions.length, 'submissions');
+            
+            // Find submission by payment_id or any pending submission
+            let targetSubmission = submissions.find(s => 
+              (s.payment_id === orderId || s.paymentId === orderId)
+            );
+            
+            if (!targetSubmission) {
+              targetSubmission = submissions.find(s => 
+                s.payment_status === 'pending' || s.paymentStatus === 'pending'
+              );
+            }
+            
+            if (targetSubmission) {
+              await sql`
+                UPDATE submissions 
+                SET payment_status = 'paid', updated_at = CURRENT_TIMESTAMP
+                WHERE id = ${targetSubmission.id}
+              `;
+              console.log('✅ Submission updated to paid, ID:', targetSubmission.id);
+            } else {
+              console.log('⚠️ No submission found to update');
+            }
+
+            return res.status(200).json({ 
+              success: true, 
+              status: 'paid',
+              message: 'Payment verified successfully'
+            });
+
+          } else if (orderStatus === 'ACTIVE') {
+            console.log('⚠️ Payment still ACTIVE (pending)');
+            return res.status(200).json({ 
+              success: false, 
+              status: 'pending',
+              message: 'Payment is still being processed'
+            });
+
+          } else {
+            console.log('❌ Payment failed or cancelled, status:', orderStatus);
+            
+            // Update payment as failed
+            await sql`
+              UPDATE payments 
+              SET status = 'failed', updated_at = CURRENT_TIMESTAMP
+              WHERE order_id = ${orderId} AND user_id = ${userId}
+            `;
+
+            return res.status(200).json({ 
+              success: false, 
+              status: 'failed',
+              message: 'Payment was not successful'
+            });
+          }
+
+        } catch (cfError) {
+          console.error('=== CASHFREE API ERROR ===');
+          console.error('Error:', cfError.message);
+          
+          return res.status(200).json({ 
+            success: false, 
+            status: 'pending',
+            message: 'Unable to verify payment status'
+          });
+        }
+        
+      } catch (error) {
+        console.error('=== DIRECT VERIFICATION FAILED ===');
+        console.error('Error:', error.message);
+        return res.status(500).json({ 
+          success: false,
+          error: 'Failed to verify payment', 
+          details: error.message 
+        });
+      }
+    }
+
     // Mark as paid endpoint - with proper Cashfree verification
     if (path === '/payments/mark-paid' && method === 'POST') {
       if (!userId) return res.status(401).json({ error: 'Unauthorized' });
