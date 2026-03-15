@@ -1054,7 +1054,7 @@ Respond ONLY with valid JSON in this exact format:
       }
     }
 
-    // Auto-complete payment after Cashfree redirect - with validation
+    // Auto-complete payment after Cashfree redirect - simplified with better error handling
     if (path === '/payments/auto-complete' && method === 'POST') {
       if (!userId) return res.status(401).json({ error: 'Unauthorized' });
       
@@ -1064,6 +1064,7 @@ Respond ONLY with valid JSON in this exact format:
         console.log('=== AUTO-COMPLETE PAYMENT START ===');
         console.log('Order ID:', orderId);
         console.log('User ID:', userId);
+        console.log('Timestamp:', new Date().toISOString());
         
         if (!orderId) {
           return res.status(400).json({ 
@@ -1082,40 +1083,39 @@ Respond ONLY with valid JSON in this exact format:
           });
         }
 
-        console.log('Payment record found:', payment.status);
+        console.log('Payment record found, current status:', payment.status);
 
-        // If already paid, return success
+        // If already paid, return success immediately
         if (payment.status === 'paid') {
           console.log('✅ Payment already completed');
           return res.status(200).json({ 
             success: true, 
             message: 'Payment already completed',
+            verified: true,
             alreadyPaid: true
           });
         }
 
-        // Verify payment status with Cashfree before marking as paid
+        // Verify payment status with Cashfree
         const CASHFREE_APP_ID = (process.env.CASHFREE_APP_ID || '').trim();
         const CASHFREE_SECRET_KEY = (process.env.CASHFREE_SECRET_KEY || '').trim();
         const CASHFREE_BASE_URL = "https://api.cashfree.com/pg";
 
-        console.log('Checking payment status with Cashfree...');
+        console.log('Verifying with Cashfree API...');
 
         try {
-          // Get order details from Cashfree
+          // Get order details from Cashfree with 8 second timeout
           const orderResponse = await axios.get(`${CASHFREE_BASE_URL}/orders/${orderId}`, {
             headers: {
               'x-client-id': CASHFREE_APP_ID,
               'x-client-secret': CASHFREE_SECRET_KEY,
               'x-api-version': '2023-08-01'
             },
-            timeout: 15000
+            timeout: 8000 // 8 second timeout
           });
 
-          console.log('Cashfree order status:', orderResponse.data.order_status);
-          console.log('Full Cashfree response:', JSON.stringify(orderResponse.data, null, 2));
-
           const orderStatus = orderResponse.data.order_status;
+          console.log('Cashfree order status:', orderStatus);
 
           // Only mark as paid if order status is PAID
           if (orderStatus === 'PAID') {
@@ -1131,7 +1131,7 @@ Respond ONLY with valid JSON in this exact format:
               WHERE order_id = ${orderId} AND user_id = ${userId}
             `;
 
-            console.log('✅ Payment status updated to paid');
+            console.log('✅ Payment status updated to paid in database');
 
             // Update submission payment status
             const submissions = await Submission.findByUserId(userId);
@@ -1161,12 +1161,12 @@ Respond ONLY with valid JSON in this exact format:
             console.log('⚠️ Payment still ACTIVE (pending)');
             return res.status(200).json({ 
               success: false, 
-              message: 'Payment is still pending',
+              message: 'Payment is still being processed',
               status: 'pending'
             });
 
           } else {
-            console.log('❌ Payment failed or cancelled:', orderStatus);
+            console.log('❌ Payment failed or cancelled, status:', orderStatus);
             
             // Mark payment as failed
             await sql`
@@ -1184,29 +1184,33 @@ Respond ONLY with valid JSON in this exact format:
 
         } catch (cfError) {
           console.error('=== CASHFREE API ERROR ===');
+          console.error('Error type:', cfError.code);
           console.error('Status:', cfError.response?.status);
-          console.error('Data:', cfError.response?.data);
           console.error('Message:', cfError.message);
-          console.error('Full error:', JSON.stringify(cfError, null, 2));
           
-          // If Cashfree API fails, return pending status (don't mark as paid)
-          // Webhook will handle the actual verification
-          console.log('⚠️ Cashfree API unavailable, returning pending status');
+          // If timeout or network error, return pending (webhook will handle it)
+          if (cfError.code === 'ECONNABORTED' || cfError.code === 'ETIMEDOUT') {
+            console.log('⚠️ Cashfree API timeout - webhook will verify');
+          } else if (cfError.response?.status) {
+            console.log('⚠️ Cashfree API error:', cfError.response.status);
+          }
           
+          // Return pending status - frontend will poll database (webhook updates it)
           return res.status(200).json({ 
             success: false, 
-            message: 'Payment verification in progress. Please wait...',
+            message: 'Payment verification in progress',
             status: 'pending',
-            note: 'Webhook will confirm final status'
+            note: 'Webhook will confirm status'
           });
         }
         
       } catch (error) {
         console.error('=== AUTO-COMPLETE PAYMENT FAILED ===');
         console.error('Error:', error.message);
+        console.error('Stack:', error.stack);
         return res.status(500).json({ 
           success: false,
-          error: 'Failed to complete payment', 
+          error: 'Failed to complete payment verification', 
           details: error.message 
         });
       }
